@@ -1,0 +1,308 @@
+---
+title: "Creating Animated Plots in R"
+author: "Abeer Hasan"
+date: "`r Sys.Date()`"
+output:
+  html_document:
+    df_print: paged
+  pdf_document: default
+editor_options:
+  markdown:
+    wrap: 72
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+setwd("C:/Users/amhasan1/OneDrive - North Carolina A&T State University/Desktop/Data Viz Workshop")
+```
+
+When you click the **Knit** button, a document will be generated that
+includes both content as well as the output of any embedded R code
+chunks within the document. please knit as HTML. You can embed an R code
+chunk like this:
+
+
+
+## gganimate: How to Create Plots with Beautiful Animation in R
+
+This document describes how to create animation in R using the
+"gganimate" R package.
+
+gganimate is an extension of the ggplot2 package for creating animated
+ggplots. It provides a range of new functionality that can be added to
+the plot object in order to customize how it should change with time.
+
+## Key features of gganimate:
+
+-   transition\_\*(): defines how the data should be spread out and how
+    it relates to itself across time.
+
+-   view(): defines how the positional scales should change along the
+    animation.
+
+-   shadow\_\*(): defines how data from other points in time should be
+    presented in the given point in time.
+
+-   enter/exit\_\*(): defines how new data should appear and how old
+    data should disappear during the course of the animation.
+
+-   ease_aes(): defines how different aesthetics should be eased during
+    transitions.
+
+## Prerequisites
+
+gganimate stable version is available on CRAN and can be installed with
+install.packages('gganimate'). The latest development version can be
+installed as follow:
+
+```{r}
+# install.packages('gganimate')
+# Load required packages and set the default ggplot2 theme to theme_bw():
+
+library(ggplot2)
+library(gganimate)
+theme_set(theme_bw())
+
+# Warning: package ‘ggplot2’ was built under R version 4.3.3Warning: package ‘gganimate’ was built under R version 4.3.3 No renderer back-end detected. "gganimate" will default to writing frames to separate files
+# Consider installing:
+# - the `gifski` package for gif output
+# - the `av` package for video output
+library(gifski) # - the `gifski` package for gif output
+
+```
+
+## Demo dataset
+
+```{r}
+library(gapminder)
+head(gapminder)
+
+```
+## Exploring the data
+```{r}
+str(gapminder)
+head(gapminder)
+summary(gapminder)
+
+table(gapminder$continent) ## Freq Table
+
+## Get the median life expectancy aggregated by continent 
+aggregate(lifeExp ~ continent, gapminder, median)
+
+## filter a specific country
+
+plot(lifeExp ~ year, gapminder, subset = country == "Cambodia", type = "b")
+
+## type = "b": plots Both	Points and lines. The default for plot is to only plot the points
+
+## Question:
+## What happened in Cambodia between 1970-1980? Look up the history of the country to see if ## there are political events that explain the change we see in the time series data.
+
+
+## Filter a specific year
+plot(lifeExp ~ gdpPercap, gapminder, subset = year == 2007, log = "x")
+
+
+## Select a specific year and compute median life expectancy for all countries grouped by continent
+library(dplyr)
+
+  gapminder %>%
+    filter(year == 2007) %>%
+    group_by(continent) %>%
+    summarise(lifeExp = median(lifeExp))
+
+  # how many unique countries does the data contain, by continent?
+  gapminder %>%
+    group_by(continent) %>%
+    summarize(n_obs = n(), n_countries = n_distinct(country))
+
+
+```
+
+## Static plot
+
+```{r gapminder-plot, fig.width=6, fig.height=3}
+p <- ggplot(
+  gapminder, 
+  aes(x = gdpPercap, y=lifeExp, size = pop, colour = country) ) +
+  geom_point(show.legend = FALSE, alpha = 0.7) +
+  scale_color_viridis_d() +
+  scale_size(range = c(2, 12)) +
+  scale_x_log10() +
+  labs(x = "GDP per capita", y = "Life expectancy")
+p
+
+
+## Question: What does the option alpha do? 
+## Experiment with different values to find out!
+
+## R Tip:
+# The command scale_color_viridis_d() in ggplot2 is used to apply a color scale
+# to discrete (categorical) variables using the # Viridis color palette, which is:
+
+#    Colorblind-friendly
+
+#    Perceptually uniform
+
+#    Print-friendly
+
+#    Visually appealing
+```
+
+## Transition through distinct states in time
+
+### Basics
+
+### Key R function:
+
+-   transition_time(). The transition length between the states will be
+    set to correspond to the actual time difference between them.
+
+-   Label variables: frame_time. Gives the time that the current frame
+    corresponds to.
+
+```{r, fig.width=7, fig.height=6}
+p + transition_time(year) +
+  labs(title = "Year: {frame_time}")
+
+```
+
+
+## Show preceding frames with gradual falloff
+
+This shadow is meant to draw a small wake after data by showing the
+latest frames up to the current. You can choose to gradually diminish
+the size and/or opacity of the shadow. The length of the wake is not
+given in absolute frames as that would make the animation susceptible to
+changes in the frame-rate. Instead it is given as a proportion of the
+total length of the animation.
+
+```{r Show preceding frames with gradual falloff}
+p + transition_time(year) +
+  labs(title = "Year: {frame_time}") +
+  shadow_wake(wake_length = 0.1, alpha = FALSE)
+
+```
+
+## Show the original data as background marks
+
+This shadow lets you show the raw data behind the current frame. Both
+past and/or future raw data can be shown and styled as you want.
+
+```{r Show the original data as background marks}
+p + transition_time(year) +
+  labs(title = "Year: {frame_time}") +
+  shadow_mark(alpha = 0.3, size = 0.5)
+
+```
+
+## Another Example Split by Continent
+
+```{r Split by Continent}
+library(gapminder)
+ggplot(gapminder, aes(gdpPercap, lifeExp, size = pop, colour = country)) +
+  geom_point(alpha = 0.7, show.legend = FALSE) +
+  scale_colour_manual(values = country_colors) +
+  scale_size(range = c(2, 12)) +
+  scale_x_log10() +
+  facet_wrap(~continent) +
+  # Here comes the gganimate specific bits
+  labs(title = 'Year: {frame_time}', x = 'GDP per capita',
+       y = 'life expectancy') +
+  transition_time(year) +
+  ease_aes('linear')
+```
+## Transition Tools
+## Reveal data along a given dimension
+
+This transition allows you to let data gradually appear, based on a
+given time dimension. Let's explore with the air quality data.
+
+## Static plot
+
+```{r ## Reveal data along a given dimension}
+p <- ggplot(
+  airquality,
+  aes(Day, Temp, group = Month, color = factor(Month))) +
+  geom_line() +
+  scale_color_viridis_d() +
+  labs(x = "Day of Month", y = "Temperature") +
+  theme(legend.position = "top")
+p
+
+```
+
+## Let data gradually appear
+
+Reveal by day (x-axis) Show points:
+
+```{r}
+
+p + 
+  geom_point() +
+  transition_reveal(Day)
+
+```
+
+Points can be kept by giving them a unique group:
+
+```{r}
+p + 
+  geom_point(aes(group = seq_along(Day))) +
+  transition_reveal(Day)
+```
+
+Transition between several distinct stages of the data Data preparation:
+
+```{r}
+library(dplyr)
+mean.temp <- airquality %>%
+  group_by(Month) %>%
+  summarise(Temp = mean(Temp))
+mean.temp
+
+```
+
+## Create a bar plot of mean temperature:
+
+```{r}
+
+p <- ggplot(mean.temp, aes(Month, Temp, fill = Temp)) +
+  geom_col() +
+  scale_fill_distiller(palette = "Reds", direction = 1) +
+  theme_minimal() +
+  theme(
+    panel.grid = element_blank(),
+    panel.grid.major.y = element_line(color = "white"),
+    panel.ontop = TRUE
+  )
+p
+```
+
+## transition_states():
+
+```{r}
+p + transition_states(Month, wrap = FALSE) +
+  shadow_mark()
+
+```
+
+## enter_grow() + enter_fade()
+
+```{r}
+p + transition_states(Month, wrap = FALSE) +
+  shadow_mark() +
+  enter_grow() +
+  enter_fade()
+```
+
+## Your Turn!:
+
+  Choose a pair of numerical variables from the airquality data or gapminder data,     and create a visualization to explore the relation between them. Decide
+  on the appropriate animation and interpret your findings. Are the
+  two variables you picked correlated or not? Explain.
+
+```{r}
+# type your solution here
+
+```
